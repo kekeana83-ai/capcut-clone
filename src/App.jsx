@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 const filters = {
   none: 'none',
@@ -55,6 +55,12 @@ function App() {
     [clips, selectedClipId]
   );
 
+  useEffect(() => {
+    if (selectedClip) {
+      setFilterMode(selectedClip.filter || 'none');
+    }
+  }, [selectedClip?.id, selectedClip?.filter]);
+
   const totalDuration = useMemo(
     () => clips.reduce((sum, clip) => sum + Math.max(clip.trimEnd - clip.trimStart, 0), 0),
     [clips]
@@ -97,16 +103,18 @@ function App() {
     const nextValue = Number(value);
 
     if (field === 'trimStart') {
+      const safeStart = Math.min(nextValue, selectedClip.trimEnd - 1 || nextValue);
       updateSelectedClip({
-        trimStart: Math.min(nextValue, selectedClip.trimEnd - 1 || nextValue),
-        duration: Math.max(selectedClip.trimEnd - nextValue, 1)
+        trimStart: safeStart,
+        duration: Math.max(selectedClip.trimEnd - safeStart, 1)
       });
     }
 
     if (field === 'trimEnd') {
+      const safeEnd = Math.max(nextValue, selectedClip.trimStart + 1);
       updateSelectedClip({
-        trimEnd: Math.max(nextValue, selectedClip.trimStart + 1),
-        duration: Math.max(nextValue - selectedClip.trimStart, 1)
+        trimEnd: safeEnd,
+        duration: Math.max(safeEnd - selectedClip.trimStart, 1)
       });
     }
   };
@@ -118,6 +126,21 @@ function App() {
       ...current,
       text: presets[nextIndex]
     }));
+  };
+
+  const addNewScene = () => {
+    const sceneId = Date.now();
+    const newClip = {
+      id: sceneId,
+      name: `Cena ${clips.length + 1}`,
+      duration: 7,
+      trimStart: 0,
+      trimEnd: 7,
+      filter: 'none'
+    };
+
+    setClips((current) => [...current, newClip]);
+    setSelectedClipId(sceneId);
   };
 
   return (
@@ -167,6 +190,9 @@ function App() {
               hidden
               onChange={handleUpload}
             />
+            <button className="secondary-button" onClick={addNewScene}>
+              + Nova cena
+            </button>
           </div>
         </aside>
 
@@ -187,13 +213,14 @@ function App() {
             <div className="preview-stage">
               {selectedClip?.src ? (
                 <video
+                  key={selectedClip.id}
                   className="video-preview"
                   src={selectedClip.src}
                   muted={!isPlaying}
                   autoPlay={isPlaying}
                   loop={isPlaying}
                   playsInline
-                  style={{ filter: filters[filterMode] || 'none' }}
+                  style={{ filter: filters[selectedClip.filter || filterMode] || 'none' }}
                 />
               ) : (
                 <div className="video-placeholder">
@@ -267,7 +294,14 @@ function App() {
             <p className="section-label">Efeitos</p>
             <label>
               Filtro
-              <select value={filterMode} onChange={(event) => setFilterMode(event.target.value)}>
+              <select
+                value={filterMode}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setFilterMode(value);
+                  updateSelectedClip({ filter: value });
+                }}
+              >
                 <option value="none">Padrão</option>
                 <option value="vivid">Vivid</option>
                 <option value="cinematic">Cinematic</option>
